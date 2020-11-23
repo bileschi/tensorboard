@@ -249,6 +249,18 @@ class TensorBoardUploader(object):
                 for value in event.summary.value:
                     tag = value.tag
                     data_type = "NO_IDEA"
+                    if tag.endswith("_hparams_/session_start_info"):
+                        name = "HPARAMS"
+                        data_type = "hparams"
+                    if tag.endswith("_hparams_/session_end_info"):
+                        name = "HPARAMS"
+                        data_type = "hparams"
+                    if tag.endswith("/image_summary"):
+                        name = tag[:-14]
+                        data_type = "/tb/image/raw"
+                    if tag.endswith("/histogram_summary"):
+                        name = tag[:-18]
+                        data_type = "/tb/timeseries/histogram"
                     if tag.endswith("/scalar_summary"):
                         name = tag[:-15]
                         data_type = "/tb/timeseries/scalar"
