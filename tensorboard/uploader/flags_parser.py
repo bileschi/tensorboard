@@ -25,6 +25,7 @@ SUBCOMMAND_FLAG = "_uploader__subcommand"
 SUBCOMMAND_KEY_UPLOAD = "UPLOAD"
 SUBCOMMAND_KEY_DELETE = "DELETE"
 SUBCOMMAND_KEY_LIST = "LIST"
+SUBCOMMAND_KEY_LS = "LS"
 SUBCOMMAND_KEY_EXPORT = "EXPORT"
 SUBCOMMAND_KEY_UPDATE_METADATA = "UPDATEMETADATA"
 SUBCOMMAND_KEY_AUTH = "AUTH"
@@ -75,6 +76,24 @@ def define_flags(parser):
         action="store_true",
         help="Set to true to force authentication flow to use the "
         "--console rather than a browser redirect to localhost.",
+    )
+
+    list_logdir = subparsers.add_parser(
+        "ls", help="list the contents of a logdir"
+    )
+    list_logdir.set_defaults(**{SUBCOMMAND_FLAG: SUBCOMMAND_KEY_LS})
+    list_logdir.add_argument(
+        "--logdir",
+        metavar="PATH",
+        type=str,
+        default=None,
+        help="Directory containing the logs to process",
+    )
+    list_logdir.add_argument(
+        "--plugins",
+        type=lambda option: option.split(","),
+        default=[],
+        help="List of plugins for which data should be scanned.",
     )
 
     upload = subparsers.add_parser(

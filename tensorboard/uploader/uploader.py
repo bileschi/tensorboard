@@ -231,6 +231,41 @@ class TensorBoardUploader(object):
         with self._tracker.send_tracker():
             self._request_sender.send_requests(run_to_events)
 
+    def list_contents_of_logdir(self):
+        """Lists the output of logdir_loader."""
+        logger.info("Ls'ing a logdir")
+
+        sync_start_time = time.time()
+        self._logdir_loader.synchronize_runs()
+        sync_duration_secs = time.time() - sync_start_time
+        logger.info("Logdir sync took %.3f seconds", sync_duration_secs)
+
+        run_to_events = self._logdir_loader.get_run_events()
+        data_objects = set()
+        # Formatting from https://stackoverflow.com/questions/9535954/printing-lists-as-tabular-data
+        row_format = "{:>30}{:>25}{:>60}"
+        for (run, event_gen) in run_to_events.items():
+            for event in event_gen:
+                for value in event.summary.value:
+                    tag = value.tag
+                    data_type = "NO_IDEA"
+                    if tag.endswith("/scalar_summary"):
+                        name = tag[:-15]
+                        data_type = "/tb/timeseries/scalar"
+                    if tag.endswith("/audio_summary"):
+                        name = tag[:-14]
+                        data_type = "/tb/timeseries/audio"
+                    elif tag == "__run_graph__":
+                        name = "default"
+                        data_type = "/tb/graph"
+                    else:
+                        name = tag
+                    data_objects.add((run, data_type, name))
+                # print(f"\tEvent: {event}")
+        print(row_format.format(*["run", "datatype", "name"]))
+        for data in sorted(list(data_objects)):
+            print(row_format.format(*data))
+
 
 def update_experiment_metadata(
     writer_client, experiment_id, name=None, description=None

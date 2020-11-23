@@ -358,6 +358,39 @@ class _ListIntent(_Intent):
         sys.stderr.flush()
 
 
+class _LsIntent(_Intent):
+    """The user intends to list the contents of a logdir."""
+
+    _MESSAGE_TEMPLATE = textwrap.dedent(
+        u"""\
+        This will list the contents of the TensorBoard logs found
+        the following directory:
+
+        {logdir}
+        """
+    )
+
+    def __init__(self, logdir):
+        self.logdir = logdir
+
+    def get_ack_message_body(self):
+        return self._MESSAGE_TEMPLATE.format(logdir=self.logdir)
+
+    def execute(self, server_info, channel):
+        api_client = dry_run_stubs.DryRunTensorBoardWriterStub()
+        uploader = uploader_lib.TensorBoardUploader(
+            api_client,
+            self.logdir,
+            allowed_plugins=server_info_lib.allowed_plugins(server_info),
+            upload_limits=server_info_lib.upload_limits(server_info),
+            one_shot=True,
+        )
+        if not os.path.isdir(self.logdir):
+            print("%s: No such directory." % self.logdir)
+            return
+        uploader.list_contents_of_logdir()
+
+
 def _die_if_bad_experiment_name(name):
     if name and len(name) > _EXPERIMENT_NAME_MAX_CHARS:
         _die(
@@ -594,6 +627,8 @@ def _get_intent(flags, experiment_url_callback=None):
             )
     elif cmd == flags_parser.SUBCOMMAND_KEY_LIST:
         return _ListIntent(json=flags.json)
+    elif cmd == flags_parser.SUBCOMMAND_KEY_LS:
+        return _LsIntent(logdir=os.path.expanduser(flags.logdir))
     elif cmd == flags_parser.SUBCOMMAND_KEY_EXPORT:
         if flags.outdir:
             return _ExportIntent(flags.outdir)
