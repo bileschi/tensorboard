@@ -242,8 +242,7 @@ class TensorBoardUploader(object):
 
         run_to_events = self._logdir_loader.get_run_events()
         data_objects = set()
-        # Formatting from https://stackoverflow.com/questions/9535954/printing-lists-as-tabular-data
-        row_format = "{:>30}{:>25}{:>60}"
+        max_widths = {"run": 8, "data_type": 8, "name": 8}
         for (run, event_gen) in run_to_events.items():
             for event in event_gen:
                 for value in event.summary.value:
@@ -252,19 +251,19 @@ class TensorBoardUploader(object):
                     if tag.endswith("_hparams_/session_start_info"):
                         name = "HPARAMS"
                         data_type = "hparams"
-                    if tag.endswith("_hparams_/session_end_info"):
+                    elif tag.endswith("_hparams_/session_end_info"):
                         name = "HPARAMS"
                         data_type = "hparams"
-                    if tag.endswith("/image_summary"):
+                    elif tag.endswith("/image_summary"):
                         name = tag[:-14]
                         data_type = "/tb/image/raw"
-                    if tag.endswith("/histogram_summary"):
+                    elif tag.endswith("/histogram_summary"):
                         name = tag[:-18]
                         data_type = "/tb/timeseries/histogram"
-                    if tag.endswith("/scalar_summary"):
+                    elif tag.endswith("/scalar_summary"):
                         name = tag[:-15]
                         data_type = "/tb/timeseries/scalar"
-                    if tag.endswith("/audio_summary"):
+                    elif tag.endswith("/audio_summary"):
                         name = tag[:-14]
                         data_type = "/tb/timeseries/audio"
                     elif tag == "__run_graph__":
@@ -273,8 +272,17 @@ class TensorBoardUploader(object):
                     else:
                         name = tag
                     data_objects.add((run, data_type, name))
+                    max_widths["run"] = max(max_widths["run"], len(run))
+                    max_widths["data_type"] = max(
+                        max_widths["data_type"], len(data_type)
+                    )
+                    max_widths["name"] = max(max_widths["name"], len(name))
                 # print(f"\tEvent: {event}")
-        print(row_format.format(*["run", "datatype", "name"]))
+        print(f"total ({len(data_objects)})")
+        row_format = "{:<30}{:<25}{:<60}"
+        row_format = f"{{:<{max_widths['run'] + 2}}}{{:<{max_widths['data_type'] + 2}}}{{:<{max_widths['name'] + 2}}}"
+
+        print(row_format.format(*["run", "data_type", "name"]))
         for data in sorted(list(data_objects)):
             print(row_format.format(*data))
 
