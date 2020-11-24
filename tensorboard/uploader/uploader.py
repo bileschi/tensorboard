@@ -231,6 +231,43 @@ class TensorBoardUploader(object):
         with self._tracker.send_tracker():
             self._request_sender.send_requests(run_to_events)
 
+    def parse_value_metadata(self, value):
+        """Collects the plugin and name from the `event.value`.
+
+        Returns: a tuple like (name, plugin)
+        """
+        name = value.tag
+        plugin = None
+        #  V1 Proto
+        if value.HasField("image"):
+            plugin = "tb/image"
+            if name.endswith("/image_summary"):
+                name = name[:-14]
+        if value.HasField("histo"):
+            plugin = "tb/timeseries/histogram"
+            if name.endswith("/histogram_summary"):
+                name = name[:-18]
+        if value.HasField("audio"):
+            plugin = "tb/timeseries/audio"
+            if name.endswith("/audio_summary"):
+                name = name[:-14]
+        if name.endswith("_hparams_/session_start_info"):
+            name = "HPARAMS"
+            plugin = "hparams"
+        elif name.endswith("_hparams_/session_end_info"):
+            name = "HPARAMS"
+            plugin = "hparams"
+        elif name.endswith("/scalar_summary"):
+            name = name[:-15]
+            plugin = "/tb/timeseries/scalar"
+        elif name == "__run_graph__":
+            name = "default"
+            plugin = "/tb/graph"
+        elif value.metadata.plugin_data.plugin_name:
+            plugin = value.metadata.plugin_data.plugin_name
+            name = value.metadata.display_name
+        return (name, plugin)
+
     def list_contents_of_logdir(self):
         """Lists the output of logdir_loader."""
         logger.info("Ls'ing a logdir")
@@ -246,31 +283,9 @@ class TensorBoardUploader(object):
         for (run, event_gen) in run_to_events.items():
             for event in event_gen:
                 for value in event.summary.value:
-                    tag = value.tag
-                    data_type = "NO_IDEA"
-                    if tag.endswith("_hparams_/session_start_info"):
-                        name = "HPARAMS"
-                        data_type = "hparams"
-                    elif tag.endswith("_hparams_/session_end_info"):
-                        name = "HPARAMS"
-                        data_type = "hparams"
-                    elif tag.endswith("/image_summary"):
-                        name = tag[:-14]
-                        data_type = "/tb/image/raw"
-                    elif tag.endswith("/histogram_summary"):
-                        name = tag[:-18]
-                        data_type = "/tb/timeseries/histogram"
-                    elif tag.endswith("/scalar_summary"):
-                        name = tag[:-15]
-                        data_type = "/tb/timeseries/scalar"
-                    elif tag.endswith("/audio_summary"):
-                        name = tag[:-14]
-                        data_type = "/tb/timeseries/audio"
-                    elif tag == "__run_graph__":
-                        name = "default"
-                        data_type = "/tb/graph"
-                    else:
-                        name = tag
+                    (name, data_type) = self.parse_value_metadata(value)
+                    if not data_type:
+                        print(value)
                     data_objects.add((run, data_type, name))
                     max_widths["run"] = max(max_widths["run"], len(run))
                     max_widths["data_type"] = max(
