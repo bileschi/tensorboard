@@ -202,6 +202,7 @@ def _create_scalar_request_sender(
     api=_USE_DEFAULT,
     max_request_size=_USE_DEFAULT,
     tracker=None,
+    sync_grpc=True,
 ):
     if api is _USE_DEFAULT:
         api = _create_mock_client()
@@ -213,6 +214,7 @@ def _create_scalar_request_sender(
         rpc_rate_limiter=util.RateLimiter(0),
         max_request_size=max_request_size,
         tracker=tracker or upload_tracker.UploadTracker(verbosity=0),
+        sync_grpc=sync_grpc,
     )
 
 
@@ -1073,11 +1075,12 @@ class ScalarBatchedRequestSenderTest(tf.test.TestCase):
             for value in event.summary.value:
                 sender.add_event(run_name, event, value, value.metadata)
 
-    def _add_events_and_flush(self, events):
+    def _add_events_and_flush(self, events, sync_grpc=True):
         mock_client = _create_mock_client()
         sender = _create_scalar_request_sender(
             experiment_id="123",
             api=mock_client,
+            sync_grpc=sync_grpc
         )
         self._add_events(sender, "", events)
         sender.flush()

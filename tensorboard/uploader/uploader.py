@@ -18,6 +18,7 @@
 import contextlib
 import functools
 import time
+import threading
 
 import grpc
 
@@ -486,6 +487,7 @@ class _ScalarBatchedRequestSender(object):
         rpc_rate_limiter,
         max_request_size,
         tracker,
+        sync_grpc=True
     ):
         if experiment_id is None:
             raise ValueError("experiment_id cannot be None")
@@ -494,6 +496,9 @@ class _ScalarBatchedRequestSender(object):
         self._rpc_rate_limiter = rpc_rate_limiter
         self._byte_budget_manager = _ByteBudgetManager(max_request_size)
         self._tracker = tracker
+        # sync_grpc: If true, will block on the request to WriteScalar.
+        self._sync_grpc=sync_grpc
+        self._sync_grpc=True  # DO NOT SUBMIT
 
         self._runs = {}  # cache: map from run name to `Run` proto in request
         self._tags = (
@@ -540,6 +545,16 @@ class _ScalarBatchedRequestSender(object):
         self._create_point(tag_proto, event, value)
         self._num_values += 1
 
+    def _async_flush_callback(future):
+        e = future.exception()
+        if e is None:
+            return future.result()
+        if e is not None:
+            if e.__class__.__name__ == "grpc.rpcError":
+                if e.code() == grpc.StatusCode.NOT_FOUND:
+                    raise ExperimentNotFoundError()
+
+
     def flush(self):
         """Sends the active request after removing empty runs and tags.
 
@@ -555,13 +570,19 @@ class _ScalarBatchedRequestSender(object):
         with _request_logger(
             request, request.runs
         ), self._tracker.scalars_tracker(self._num_values):
-            try:
-                # TODO(@nfelt): execute this RPC asynchronously.
-                grpc_util.call_with_retries(self._api.WriteScalar, request)
-            except grpc.RpcError as e:
-                if e.code() == grpc.StatusCode.NOT_FOUND:
-                    raise ExperimentNotFoundError()
-                logger.error("Upload call failed with error %s", e)
+            if self._sync_grpc:
+                try:
+                    # TODO(@nfelt): execute this RPC asynchronously.
+                    grpc_util.call_with_retries(self._api.WriteScalar, request)
+                except grpc.RpcError as e:
+                    if e.code() == grpc.StatusCode.NOT_FOUND:
+                        raise ExperimentNotFoundError()
+                    logger.error("Upload call failed with error %s", e)
+            else:
+                # grpc_util.async_call(
+                #     self._api.WriteScalar, request, _async_flush_callback)
+                grpc_util.async_call_with_retries(
+                    self._api.WriteScalar, request, _async_flush_callback)
 
         self._new_request()
 
